@@ -1,0 +1,1 @@
+https://stackoverflow.com/questions/46533491/pandas-read-html-missing-some-tables
