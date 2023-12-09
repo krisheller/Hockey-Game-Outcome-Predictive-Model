@@ -1,0 +1,110 @@
+1702127581497	geckodriver	INFO	Listening on 127.0.0.1:50875
+1702127584598	mozrunner::runner	INFO	Running command: "C:\\Program Files\\Mozilla Firefox\\firefox.exe" "--marionette" "--remote-debugging-port" "50876" "--remote-allow-hosts" "localhost" "-no-remote" "-profile" "C:\\Users\\krish\\AppData\\Local\\Temp\\rust_mozprofileNdxwdy"
+console.warn: services.settings: Ignoring preference override of remote settings server
+console.warn: services.settings: Allow by setting MOZ_REMOTE_SETTINGS_DEVTOOLS=1 in the environment
+1702127584887	Marionette	INFO	Marionette enabled
+Dynamically enable window occlusion 0
+1702127584956	Marionette	INFO	Listening on port 50889
+WebDriver BiDi listening on ws://127.0.0.1:50876
+Read port: 50889
+1702127585126	RemoteAgent	WARN	TLS certificate errors will be ignored for this session
+DevTools listening on ws://127.0.0.1:50876/devtools/browser/ec080bf6-ab97-4379-bf40-bccf68871242
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 7802 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 5024 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+JavaScript warning: https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c, line 468: Script terminated by timeout at:
+get@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:115
+stop@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:87
+aa.Jk/c/<@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:412
+
+1702127597366	Marionette	INFO	Stopped listening on port 50889
+Dynamically enable window occlusion 1
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+1702127673608	geckodriver	INFO	Listening on 127.0.0.1:51023
+1702127676659	mozrunner::runner	INFO	Running command: "C:\\Program Files\\Mozilla Firefox\\firefox.exe" "--marionette" "--remote-debugging-port" "51024" "--remote-allow-hosts" "localhost" "-no-remote" "-profile" "C:\\Users\\krish\\AppData\\Local\\Temp\\rust_mozprofileMAXfnQ"
+console.warn: services.settings: Ignoring preference override of remote settings server
+console.warn: services.settings: Allow by setting MOZ_REMOTE_SETTINGS_DEVTOOLS=1 in the environment
+1702127676906	Marionette	INFO	Marionette enabled
+Dynamically enable window occlusion 0
+1702127676960	Marionette	INFO	Listening on port 51033
+WebDriver BiDi listening on ws://127.0.0.1:51024
+Read port: 51033
+1702127677095	RemoteAgent	WARN	TLS certificate errors will be ignored for this session
+DevTools listening on ws://127.0.0.1:51024/devtools/browser/94177c04-2b26-472f-a008-206c3a4b004f
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 4241 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+1702127708544	addons.xpi	ERROR	System addon update list error SyntaxError: XMLHttpRequest.open: 'http://%(server)s/dummy-system-addons.xml' is not a valid URL.
+JavaScript warning: https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c, line 468: Script terminated by timeout at:
+get@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:115
+stop@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:87
+aa.Jk/c/<@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:412
+
+1702128077079	Marionette	INFO	Stopped listening on port 51033
+Dynamically enable window occlusion 1
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+istening on ws://127.0.0.1:51155
+Read port: 51165
+1702127733835	RemoteAgent	WARN	TLS certificate errors will be ignored for this session
+DevTools listening on ws://127.0.0.1:51155/devtools/browser/a743016a-777e-4676-98e2-eb227fef7102
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 248 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 2873 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+1702127765278	addons.xpi	ERROR	System addon update list error SyntaxError: XMLHttpRequest.open: 'http://%(server)s/dummy-system-addons.xml' is not a valid URL.
+JavaScript warning: https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c, line 468: Script terminated by timeout at:
+get@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:115
+stop@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:87
+aa.Jk/c/<@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:412
+
+1702128077064	Marionette	INFO	Stopped listening on port 51165
+Dynamically enable window occlusion 1
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+istening on ws://127.0.0.1:51288
+Read port: 51298
+1702127790985	RemoteAgent	WARN	TLS certificate errors will be ignored for this session
+DevTools listening on ws://127.0.0.1:51288/devtools/browser/1458dda1-22c9-408e-9118-e74476f1cddc
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 1980 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 2360 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 4618 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+1702127821137	addons.xpi	ERROR	System addon update list error SyntaxError: XMLHttpRequest.open: 'http://%(server)s/dummy-system-addons.xml' is not a valid URL.
+JavaScript warning: https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c, line 468: Script terminated by timeout at:
+get@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:115
+stop@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:87
+aa.Jk/c/<@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:412
+
+1702128077085	Marionette	INFO	Stopped listening on port 51298
+Dynamically enable window occlusion 1
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+ws://127.0.0.1:51408/devtools/browser/2e4b3925-76df-41b1-8e28-79449145782e
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 5118 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+JavaScript warning: https://pagead2.googlesyndication.com/bg/Dtt_-LR3WxpzwV0Gscftq1A_D1owstvxoTnWWhwY4Ow.js line 2 > eval line 3928 > eval line 1 > eval line 1 > eval, line 1: WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.
+1702127850138	addons.xpi	ERROR	System addon update list error SyntaxError: XMLHttpRequest.open: 'http://%(server)s/dummy-system-addons.xml' is not a valid URL.
+JavaScript warning: https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c, line 468: Script terminated by timeout at:
+get@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:115
+stop@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:87
+aa.Jk/c/<@https://www.googletagmanager.com/gtag/js?id=G-JBVR34421G&l=dataLayer&cx=c:468:412
+
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+JavaScript error: resource://gre/modules/AsyncShutdown.sys.mjs, line 573: NotFoundError: No such JSWindowActor 'DevToolsFrame'
+1702128077294	Marionette	INFO	Stopped listening on port 51418
+Dynamically enable window occlusion 1
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
+JavaScript error: , line 0: TypeError: NetworkError when attempting to fetch resource.
