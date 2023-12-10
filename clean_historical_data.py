@@ -51,7 +51,7 @@ if (write_to_db):
         try:
             value.to_sql(key, conn, if_exists='fail')
         except:
-            None
+            pass
 
 #Else we can just pull from the db
 players = pd.read_sql('SELECT * \
