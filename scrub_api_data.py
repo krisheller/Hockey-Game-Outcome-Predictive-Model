@@ -19,6 +19,7 @@ from odds import get_odds
 # - update the 'id' field in the games table to be game_id instead for uniformity?
 # - update the 'id' field for all player tables ot be player_id instead for uniformity
 # - add a player_home field to each event table?
+# - game dates seem to be off a bit
 
 #run lookups for player ids to get their names directly within the files?
 #do the same for team IDs in the _games files

@@ -54,10 +54,8 @@ def process_special_teams(overwrite_db=False):
     #For now we're going to cut down the list for testing
     all_games = pd.read_sql("SELECT id \
                             FROM games \
+                            WHERE id = 2020020050 \
                             LIMIT 1",con=conn)['id'].tolist()
-
-    
-    
     
     #This is the list of games that we need to get the data for
     game_list = list(set(all_games) - set(special_teams))
@@ -80,6 +78,12 @@ def process_special_teams(overwrite_db=False):
                             FROM games \
                             WHERE id in ({query_list})',con=conn)
     
+    #Finally we need every goal that has been scored because this will reset the PP if scored by team on PP
+    goals = pd.read_sql(f'SELECT * \
+                            FROM shots \
+                            WHERE game_id in ({query_list}) \
+                            AND result = "goal"',con=conn)
+    
 
     #Drop penalties that don't actually result in powerplays
     penalties = penalties[penalties['duration']!='N/A'].reset_index(drop=True)
@@ -91,6 +95,9 @@ def process_special_teams(overwrite_db=False):
     for game in game_list:
         #New df for each game
         game_st = pd.DataFrame()
+
+        #Dataframe to keep track at each second in the game
+        seconds = pd.DataFrame(0, index=np.arange(1200*4), columns=['home_skaters_off_ice','away_skaters_off_ice'])
 
         #Let's get the home team and away teams
         home_team = games[games['id']==game]['home_team'].item()
@@ -105,60 +112,44 @@ def process_special_teams(overwrite_db=False):
         away_skaters_off_ice = 0
         period = 1
 
-        game_st = pd.concat([game_st,pd.DataFrame.from_dict({
-            'game_id':[game],
-            'home_team':[home_team],
-            'away_team':[away_team],
-            'period':[period],
-            'situation_start_time':[current_time],
-            'home_skaters_off_ice':[home_skaters_off_ice],
-            'away_skaters_off_ice':[away_skaters_off_ice],
-            'home_skaters_off_ice_diff':[home_skaters_off_ice-away_skaters_off_ice]           
-        })])
-
-
         #Now within the game, we have to iterate over every penalty and set a new state for each one that occurs
         for i,penalty in temp.iterrows():
             
             #New start time will just be the time the penalty is committed
             current_time = penalty['time_remaining']
-            period = penalty['period']
-            
-            #Determine who is losing a skater
-            if penalty['committed_team'] == home_team:
-                home_skaters_off_ice += 1
-            else: away_skaters_off_ice += 1
+            start_period = penalty['period']
+            end_period = start_period
+            duration = int(penalty['duration'])
 
-            game_st = pd.concat([game_st,pd.DataFrame.from_dict({
-                'game_id':[game],
-                'home_team':[home_team],
-                'away_team':[away_team],
-                'period':[period],
-                'situation_start_time':[current_time],
-                'home_skaters_off_ice':[home_skaters_off_ice],
-                'away_skaters_off_ice':[away_skaters_off_ice],
-                'home_skaters_off_ice_diff':[home_skaters_off_ice-away_skaters_off_ice]            
-            })])
+            situation_end_time = current_time - int(penalty['duration'])
+            if situation_end_time < 0:
+                situation_end_time += 1200
+                end_period += 1
+            
+            if penalty['committed_team'] == home_team:
+                seconds.iloc[4800-((4-start_period)*1200+current_time):4800-((4-end_period)*1200+situation_end_time), 0] += 1
+                print(f"home team losing 1 man between {start_period} {current_time} and {end_period} {situation_end_time}")
+            else:
+                seconds.iloc[4800-((4-start_period)*1200+current_time):4800-((4-end_period)*1200+situation_end_time), 1] += 1
+                print(f"away team losing 1 man between {start_period} {current_time} and {end_period} {situation_end_time}")
+            
+            
+        print(seconds.iloc[4799-(2*1200+900),])
 
             #Have to figure out how to handle multiple penalties committed within a similar period
             #Second-by-second is probably too intensive and gets confusing when adding in OT
             #situation start is preferable but we have to figure out some kind of sorting 
             #Does this require recursion?
 
+            #ASSIKGN THE PP GOALS DATA AT THE SAME TIME. can cutoff PP if a goal is scored and not assign unnecessary values.
+
             #Check if another penalty is committed within this special teams period
             #Account for period changeovers
-            situation_end_time = current_time - int(penalty['duration'])
-            if situation_end_time < 0:
-                situation_end_time += 1200
-                period += 1
 
-            if i+1 < len(temp):
-                if temp.loc[i+1, 'time_remaining'] > situation_end_time and period == temp.loc[i+1, 'period']:
-                    print("concurrent")
 
         special_teams = pd.concat([special_teams, game_st])
 
-    return special_teams, penalties
+    return penalties
 
 #Helper Function to get situation status based on # of players on ice
 def get_situation_label(home, away):
