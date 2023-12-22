@@ -11,6 +11,20 @@ from collections import Counter
 import sqlite3
 from pathlib import Path
 
+from odds import get_odds
+
+#Is there anything else we want to add to tables?
+# - add a season marker to each event table?
+# - add a date field to each event table?
+# - update the 'id' field in the games table to be game_id instead for uniformity?
+# - update the 'id' field for all player tables ot be player_id instead for uniformity
+# - add a player_home field to each event table?
+
+#run lookups for player ids to get their names directly within the files?
+#do the same for team IDs in the _games files
+
+#Maybe we ditch the whole csv thing and just backup the database when we need to....
+
 def get_game_summaries(replace_table=False):
     #Capture the outcomes and other data (date, home/away, etc. about each game)
 
@@ -184,6 +198,11 @@ def get_stats(replace_table=False):
                                      FROM games', con=conn)['id'].to_list()
         
         games = list(set(game_list_full) - set(game_list_exist))
+
+        if len(games) == 0:
+            print("No new games to pull.")
+            return
+
         games.sort()
         
         if(replace_table):
@@ -798,38 +817,211 @@ def get_stats(replace_table=False):
             giveaways_df = pd.DataFrame()
             takeaways_df = pd.DataFrame()
             blocks_df = pd.DataFrame()
+            try:
+                if skater_stats.shape[0] > 0:
+                    if not(os.path.isfile('data\games\skater_games.csv')):
+                        skater_stats.to_csv('data\games\skater_games.csv', index=False, mode='w', header=True)
+                    else: skater_stats.to_csv('data\games\skater_games.csv', index=False, mode='a', header=False)
+
+                    skater_stats.to_sql('skater_games',conn,if_exists='append')
+                    skater_stats = pd.DataFrame()
+            except:
+                pass
+
+            try:
+                if goalie_stats.shape[0] > 0:
+                    if not(os.path.isfile('data\games\goalie_games.csv')):
+                        goalie_stats.to_csv('data\games\goalie_games.csv', index=False, mode='w', header=True)
+                    else: goalie_stats.to_csv('data\games\goalie_games.csv', index=False, mode='a', header=False)
+
+                    goalie_stats.to_sql('goalie_games',conn,if_exists='append')
+                    goalie_stats = pd.DataFrame()
+            except:
+                pass
+
+    #One last round of saving for the things that were left out 
+    try:
+        if box_score.shape[0] > 0:
+            if not(os.path.isfile('data\games\\box_scores.csv')):
+                box_score.to_csv('data\games\\box_scores.csv', index=False, mode='w', header=True)
+            else: box_score.to_csv('data\games\\box_scores.csv', index=False, mode='a', header=False)
+
+            box_score.to_sql('box_scores',conn,if_exists='append')
+
+            box_score = pd.DataFrame()
+    except:
+        pass
+    
+
+    tables = {'shots':shots_df,
+        'faceoffs':faceoffs_df,
+        'penalties':penalties_df,
+        'hits':hits_df,
+        'giveaways':giveaways_df,
+        'takeaways':takeaways_df,
+        'blocks':blocks_df}
+    
+    for key, value in tables.items():
+        try:
+            #if file exists, we'll write the header
+            if value.shape[0] > 0:
+                if not(os.path.isfile(f'data\events\{key}.csv')):
+                    value.to_csv(f'data\events\{key}.csv', index=False, mode='w', header=True)
+                else: value.to_csv(f'data\events\{key}.csv', index=False, mode='a', header=False)
+                
+                value.to_sql(key, conn, if_exists='append')
+        except:
+            pass 
 
 def update_db():
-    #Pull all new games that are not yet stored in the database via cllas to above 2 functions
+
+    #Pull all new games that are not yet stored in the database
     get_game_summaries()
+
+    #Get the event and game-level stats for all the games we just pulled in
     get_stats()
 
+    #Get today's odds 
+    get_odds()
+
+    #Print some information about what we just did
     Path('data\db.db').touch()
     conn = sqlite3.connect('data\db.db')
     c = conn.cursor()
 
-    most_recent_game = pd.read_sql('SELECT MAX(id) \
-                        FROM games', con=conn).iloc[0,0]
+    most_recent_game = pd.read_sql('SELECT * \
+                        FROM games \
+                        ORDER BY id DESC \
+                        LIMIT 1', con=conn)
     
-    most_recent_game_date = parser.parse(pd.read_sql(f'SELECT date \
-                                    FROM games \
-                                    WHERE id = {most_recent_game} \
-                                    LIMIT 1', con=conn).iloc[0,0]).date()
+    home_team, away_team= most_recent_game['home_team'].values[0],most_recent_game['away_team'].values[0]
+    recent_id = most_recent_game.loc[0,'id']
     
     now = dt.datetime.now().time().strftime('%I:%M %p')
+    now_date = dt.datetime.now().date()
     
 
     
-    print(f"Data up to date with finished games as of {now} ET on {most_recent_game_date}. \nID of most recent game: {most_recent_game}")
+    print(f"Data up to date with finished games as of {now} ET on {now_date}. \nID of most recent game: {recent_id}, {away_team} @ {home_team}")
     
 
 
     return
 
-def get_team_info():
+def get_team_info(id):
     #Get the team to ID mapping and other info like conference and division
     print("nothing yet!")
 
-def get_player_info():
-    #See if there's any other player information that we don't have that we can grab from here
-    print("Nothing yet!")
+def get_player_info(id, refresh=False):
+    #Refresh: update the player's info in the database / csv
+    #
+
+    #to keep in mind: we can also get season-by-season stats for each player broken out as regular vs. post-season
+
+    Path('data\db.db').touch()
+    conn = sqlite3.connect('data\db.db')
+    c = conn.cursor()
+
+    if refresh:
+        player_list = [] #PULL all ids from the skaters and goalies lists
+
+    
+    else: #Just doing the single player
+        player_list = [id]
+
+    for player in player_list:
+        url = f'https://api-web.nhle.com/v1/player/{id}/landing'
+        response = requests.get(url).json()
+
+        print(response)
+
+        is_active = response['isActive']
+
+        if is_active:
+            current_team = response['currentTeamAbbrev']
+        else: 
+            current_team = 'N/A'
+
+        first_name = response['firstName']['default']
+        last_name = response['lastName']['default']
+        number = response['sweaterNumber']
+        position = response['position']
+        headshot_link = response['headshot']
+        height = response['heightInInches']
+        weight = response['weightInPounds']
+        birthdate = response['birthDate']
+        birth_country = response['birthCountry']
+        shoots_catches = response['shootsCatches']
+        
+        #Not everyone is drafted, some sign as FA
+        try:
+            draft_year = response['draftDetails']['year']
+            draft_team = response['draftDetails']['teamAbbrev']
+            draft_round = response['draftDetails']['round']
+            draft_pick = response['draftDetails']['overallPick']
+        except:
+            draft_year = 'N/A'
+            draft_team = 'N/A'
+            draft_round = 'N/A'
+            draft_pick = 'N/A'
+        
+        try:
+            top_100 = response['inTop100AllTime']
+            hof = response['hof']
+        except:
+            top_100 = 'N/A'
+            hof = 'N/A'
+
+        #Let's see about awards
+        try:
+            awards = response['awards']
+            award_list = []
+
+            for award in awards:
+                award_name = award['trophy']['default'].replace(' ','')
+                award_name = award_name.replace('.','')
+                
+                for season in award['seasons']:
+                    year = str(season['seasonId'])[0:4]
+                    award_list.append(award_name+year)
+        except:
+            award_list = []
+
+       # print(award_list)
+
+        temp = pd.DataFrame.from_dict({
+            'is_active':[is_active],
+            'current_team':[current_team],
+            'first_name':[first_name],
+            'last_name':[last_name],
+            'number':[number],
+            'position':[position],
+            'headshot_link':[headshot_link],
+            'height':[height],
+            'weight':[weight],
+            'birthdate':[birthdate],
+            'birth_country':[birth_country],
+            'shoots_catches':[shoots_catches],
+            'draft_year':[draft_year],
+            'draft_team':[draft_team],
+            'draft_round':[draft_round],
+            'draft_pick':[draft_pick],
+            'awards':[award_list],
+            'top_100':[top_100],
+            'hof':[hof]    
+        })
+
+        print(temp.T)
+        #We could try to add in previous teams, it would probably help for inactive players
+
+
+    return 
+
+
+
+
+#Goalie
+#get_player_info(8478048)
+
+#Skater
+#sget_player_info(8477180)

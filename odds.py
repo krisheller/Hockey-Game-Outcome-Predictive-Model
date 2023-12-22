@@ -9,6 +9,8 @@ import pandas as pd
 import sqlite3
 from pathlib import Path
 
+#Odds are inputting the wrong time in oddsasof?
+
 #This will get odds for the upcoming games on today's date
 def get_odds():
 
@@ -148,3 +150,9 @@ def get_odds():
     
         
     return
+
+def evaluate_book(book):
+    #This will take a look at the historical odds from a bookmaker and compare them to results
+    #Will track these as well
+
+    print("nothing yet!")
