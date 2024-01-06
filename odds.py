@@ -140,10 +140,6 @@ def get_odds():
     for key, value in df_dict.items():
         try:
             if value.shape[0] > 0:
-                if not(os.path.isfile(f'data\odds\\{key}.csv')):
-                    value.to_csv(f'data\odds\\{key}.csv', index=False, mode='w', header=True)
-                else: value.to_csv(f'data\odds\\{key}.csv', index=False, mode='a', header=False)
-
                 value.to_sql(f'{key}',conn,if_exists='append')
         except:
             pass

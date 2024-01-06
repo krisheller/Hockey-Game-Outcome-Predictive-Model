@@ -11,11 +11,12 @@ import seaborn as sns
 import sqlite3
 from pathlib import Path
 
-
 from sklearn.preprocessing import StandardScaler
-Path('data\db.db').touch()
-conn = sqlite3.connect('data\db.db')
-c = conn.cursor()
+import joblib
+
+
+
+
 
 ####
 #Todo
@@ -33,296 +34,425 @@ c = conn.cursor()
     #blocks pg last 5
     #product of ppl5 and opponent pp l5 ?
     #goal differential?
-
-#Some of this stuff can be taken from the skater_games and goalie_games files but things like team penalty mins or # of power plays is going to have to be calculated.
-
-#Function to determine if players are happening on the powerplay or shorthanded
-#Maybe it also creates a full table of all powerplay situations and whether or not a goal is scored?
-def process_special_teams(overwrite_db=False):
-
-    #Get the games we already have
-    try:
-        special_teams = pd.read_sql('SELECT id \
-                                    FROM special_teams',con=conn)['id'].tolist()
-        
-        if overwrite_db:
-            raise Exception("Overwriting special teams db")
-        
-    except:
-        special_teams = []
-
-    #For now we're going to cut down the list for testing
-    all_games = pd.read_sql("SELECT id \
-                            FROM games \
-                            WHERE id = 2020020050 \
-                            LIMIT 1",con=conn)['id'].tolist()
-    
-    #This is the list of games that we need to get the data for
-    game_list = list(set(all_games) - set(special_teams))
-    game_list.sort()
-
-    #If there's nothing to do, exit
-    if len(game_list) == 0:
-        print("No special teams to process.")
-        return
-    
-    #Let's get all the penalties committed in the games of interest
-    query_list = ', '.join(str(game) for game in game_list)
-    
-    penalties = pd.read_sql(f'SELECT * \
-                            FROM penalties \
-                            WHERE game_id in ({query_list})',con=conn)
-    
-    #We also need to get the games to know who is home and who is away 
-    games = pd.read_sql(f'SELECT * \
-                            FROM games \
-                            WHERE id in ({query_list})',con=conn)
-    
-    #Finally we need every goal that has been scored because this will reset the PP if scored by team on PP
-    goals = pd.read_sql(f'SELECT * \
-                            FROM shots \
-                            WHERE game_id in ({query_list}) \
-                            AND result = "goal"',con=conn)
-    
-
-    #Drop penalties that don't actually result in powerplays
-    penalties = penalties[penalties['duration']!='N/A'].reset_index(drop=True)
-    penalties.drop(['index'],axis=1,inplace=True)
-
-    #Now we iterate over each of these penalties and update the state
-    special_teams = pd.DataFrame()
-
-    for game in game_list:
-        #New df for each game
-        game_st = pd.DataFrame()
-
-        #Dataframe to keep track at each second in the game
-        seconds = pd.DataFrame(0, index=np.arange(1200*4), columns=['home_skaters_off_ice','away_skaters_off_ice'])
-
-        #Let's get the home team and away teams
-        home_team = games[games['id']==game]['home_team'].item()
-        away_team = games[games['id']==game]['away_team'].item()
-
-        temp = penalties[penalties['game_id']==game]
-        
-        #We're always going to start the game in 5v5
-        current_time = 1200
-        current_period = 1
-        home_skaters_off_ice = 0
-        away_skaters_off_ice = 0
-        period = 1
-
-        #Now within the game, we have to iterate over every penalty and set a new state for each one that occurs
-        for i,penalty in temp.iterrows():
-            
-            #New start time will just be the time the penalty is committed
-            current_time = penalty['time_remaining']
-            start_period = penalty['period']
-            end_period = start_period
-            duration = int(penalty['duration'])
-
-            situation_end_time = current_time - int(penalty['duration'])
-            if situation_end_time < 0:
-                situation_end_time += 1200
-                end_period += 1
-            
-            if penalty['committed_team'] == home_team:
-                seconds.iloc[4800-((4-start_period)*1200+current_time):4800-((4-end_period)*1200+situation_end_time), 0] += 1
-                print(f"home team losing 1 man between {start_period} {current_time} and {end_period} {situation_end_time}")
-            else:
-                seconds.iloc[4800-((4-start_period)*1200+current_time):4800-((4-end_period)*1200+situation_end_time), 1] += 1
-                print(f"away team losing 1 man between {start_period} {current_time} and {end_period} {situation_end_time}")
-            
-            
-        print(seconds.iloc[4799-(2*1200+900),])
-
-            #Have to figure out how to handle multiple penalties committed within a similar period
-            #Second-by-second is probably too intensive and gets confusing when adding in OT
-            #situation start is preferable but we have to figure out some kind of sorting 
-            #Does this require recursion?
-
-            #ASSIKGN THE PP GOALS DATA AT THE SAME TIME. can cutoff PP if a goal is scored and not assign unnecessary values.
-
-            #Check if another penalty is committed within this special teams period
-            #Account for period changeovers
+    #win/loss streak
+    #high danger shot/save%?
 
 
-        special_teams = pd.concat([special_teams, game_st])
 
-    return penalties
 
-#Helper Function to get situation status based on # of players on ice
-def get_situation_label(home, away):
-    home = int(home)
-    away = int(away)
-    if home > away:
-        return 'SH'
-    elif away > home:
-        return 'PP'
-    else:
-        return 'EV'
 
 def process_games_data(n=None, last_n_games = 10, overwrite_db=False):
     #This will pull the data that we have in our sql database and setup to get ready for predictions
     #n: total number of games to pull
     #last_n_games: will look back this many games for each team to generate stats
     
-    
-    #See what games don't need to be replaced
+    #Raw data
+    Path('data\db.db').touch()
+    conn = sqlite3.connect('data\db.db')
+
+    #Processed data
+    Path('data\db_processed.db').touch()
+    conn_proc = sqlite3.connect('data\db_processed.db')
+
     try:
-        processed_games = pd.read_sql('SELECT id \
-                                     FROM games_adv', con=conn)['id'].tolist()
+        processed_games = pd.read_sql('SELECT game_id \
+                                     FROM games_adv', con=conn_proc)['game_id'].tolist()
         
         if(overwrite_db):
             raise Exception("Overwriting database, toss to except statement")
     except:
+        overwrite_db = True
         processed_games = []
+
+        #We erase the games_adv table from the database
+        conn_proc.close()
+        os.remove('data\db_processed.db')
+        
+        #Start a new one
+        Path('data\db_processed.db').touch()
+        conn_proc = sqlite3.connect('data\db_processed.db')
+        d = conn_proc.cursor()
 
     #Get the list of games from the games database
     if n != None:
-        all_games = pd.read_sql(f'SELECT * \
+        games = pd.read_sql(f'SELECT * \
                             FROM games \
-                            WHERE season >= 2015 \
-                            ORDER BY id DESC \
+                            ORDER BY game_id ASC \
                             LIMIT {n}', con=conn)
     else:
-        all_games = pd.read_sql(f'SELECT * \
+        games = pd.read_sql(f'SELECT * \
                             FROM games \
-                            WHERE season >= 2015 \
-                            ORDER BY id DESC', con=conn)
+                            ORDER BY game_id ASC', con=conn)
         
+
+
+    #Re-index and sort the games so they're moving forward in time
+    games.drop(['index'], axis=1, inplace=True)
+    games.sort_values(by='game_id', ascending=True, inplace=True)
+    games.reset_index(inplace=True, drop=True)
+
+    #we can quickly calculate our target variables we're going to eventually try to predict
+    games['home_win'] = np.where(games['home_team'] == games['winner'], 1, 0)
+    games['home_win_margin'] = games['home_score'] - games['away_score']
+    games['total_goals'] = games['home_score'] + games['away_score']
+    
+    #Let's just worry about training the model on regular season games
+    games = games.loc[(games['playoffs']==0)]
+
+    #Drop columns we don't need anymore
+    drop_cols = ['start_time','tz','link', 'winner','neutral_site','playoffs','round','series_game','top_seed','bottom_seed','home_wins','away_wins']
+    games.drop(drop_cols, axis=1, inplace=True)
+    
     #Get the difference between the two for the new games that we need to get advanced stats for
-    game_list = list(set(all_games['id'].tolist()) - set(processed_games))
+    game_list = list(set(games['game_id'].tolist()) - set(processed_games))
+
+    ##This is breaking when trying to update because it's not pulling all the games data to draw from
 
     #If we're up to date, don't do anything else!
     if len(game_list) == 0:
         print("Advanced game stats table up to date.")
         return
 
-    games = all_games[all_games['id'].isin(game_list)]
+    #Tracking: get the time now
+    now = dt.datetime.now()
 
-    for i,game in games.iterrows():
+    print(len(game_list))
 
-        #Re-index and sort the games so they're moving forward in time
-        games.drop(['index'], axis=1, inplace=True)
-        games.sort_values(by='id', ascending=True, inplace=True)
-        games.reset_index(inplace=True, drop=True)
-
-        #we can quickly calculate our target variables we're going to eventually try to predict
-        games['home_win'] = np.where(games['home_team'] == games['winner'], 1, 0)
-        games['home_win_margin'] = games['home_score'] - games['away_score']
-        games['total_goals'] = games['home_score'] + games['away_score']
+    #Iterate over each game and collect stats about the state before it
+    for i, game in games.iterrows():
         
-        #Let's just worry about training the model on regular season games played home/away
-        games = games.loc[(games['neutral_site']==0) & (games['playoffs']==0)]
-
-        #Drop columns we don't need anymore
-        drop_cols = ['start_time','tz','link', 'winner','neutral_site','playoffs','round','series_game','top_seed','bottom_seed','home_wins','away_wins']
-        games.drop(drop_cols, axis=1, inplace=True)
+        #Only care about the games that we don't already have data for
+        if game['game_id'] not in game_list:
+            continue
 
         away = game['away_team']
         home = game['home_team']
-        date = game['date']
+        season = game['season']
+        id = game['game_id']
+
+        #Get each team's point percentage prior to the game being played
+        home_prior = games[(games['season']==season) & (games['game_id']<id) & ((games['home_team']==home) | (games['away_team']==home))]
+        away_prior = games[(games['season']==season) & (games['game_id']<id) & ((games['home_team']==away) | (games['away_team']==away))]
+
+        ######################################
+        #Point percentages prior to this game#
+        ######################################
+        home_total_points = 0
+        away_total_points = 0
+
+        try:
+            for j, g in home_prior.iterrows():
+                if g['home_win'] == 1 and g['home_team']==home or g['home_win'] == 0 and g['home_team']!=home:
+                   home_total_points += 2
+                elif g['full_time'] != 'REG':
+                    home_total_points += 1
+            home_point_pct = home_total_points / (home_prior.shape[0]*2) 
+        except: home_point_pct = np.nan #Handles the first game of the season
+
+        try:
+            for j, g in away_prior.iterrows():
+                if g['home_win'] == 1 and g['home_team']==away or g['home_win'] == 0 and g['home_team']!=away:
+                    away_total_points += 2
+                elif g['full_time'] != 'REG':
+                    away_total_points += 1
+            away_point_pct = away_total_points / (away_prior.shape[0]*2) 
+        except: away_point_pct = np.nan #Handles the first game of the season
+
+        games.loc[i,'home_point_pct'] = home_point_pct
+        games.loc[i,'away_point_pct'] = away_point_pct
+ 
+        #Might as well throw in the "afters" as well since we will need them at some point later
+        if game['home_win'] == 1:
+            home_total_points += 2
+            if game['full_time'] != 'REG':
+                away_total_points+=1
+        else:
+            away_total_points += 2
+            if game['full_time'] != 'REG':
+                home_total_points+=1
+
+        games.loc[i,'home_point_pct_after'] = home_total_points / ((home_prior.shape[0]+1)*2)
+        games.loc[i,'away_point_pct_after'] = away_total_points / ((away_prior.shape[0]+1)*2)
+
+        ##############################################################################################################################
+        #Shooting %, goals, shots per 60 (can calculate total game time from the shots table, last shot ends the game for total time)#
+        ##############################################################################################################################
+
+        #First home team
+        if home_prior.shape[0] > 0:
+            
+            #Get all the shots from the games in the prior games list
+            id_list = ', '.join(str(id) for id in home_prior['game_id'].tolist())
+               
+            total_shots = pd.read_sql(f'SELECT COUNT(result)  \
+                                    FROM shots \
+                                    WHERE game_id in ({id_list}) AND shooter_team == "{home}"', con=conn).iloc[0,0]
+            
+            total_shots_against = pd.read_sql(f'SELECT COUNT(result)  \
+                                    FROM shots \
+                                    WHERE game_id in ({id_list}) AND shooter_team != "{home}" AND result != "miss"', con=conn).iloc[0,0]
+
+            total_goals = pd.read_sql(f'SELECT COUNT(result)  \
+                        FROM shots \
+                        WHERE game_id in ({id_list}) AND shooter_team == "{home}" AND result == "goal"', con=conn).iloc[0,0]
+            
+            total_goals_against = pd.read_sql(f'SELECT COUNT(result)  \
+                                    FROM shots \
+                                    WHERE game_id in ({id_list}) AND shooter_team != "{home}" AND result == "goal"', con=conn).iloc[0,0]
+            
+            total_giveaways = pd.read_sql(f'SELECT COUNT(event_id)  \
+                                    FROM giveaways \
+                                    WHERE game_id in ({id_list}) AND giver_team == "{home}"', con=conn).iloc[0,0]
+            
+            total_takeaways = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM takeaways \
+                        WHERE game_id in ({id_list}) AND taker_team == "{home}"', con=conn).iloc[0,0]
+            
+            total_penalty_mins = pd.read_sql(f'SELECT SUM(duration)  \
+                        FROM penalties \
+                        WHERE game_id in ({id_list}) AND committed_team == "{home}"', con=conn).iloc[0,0]
+            
+            total_faceoffs = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM faceoffs \
+                        WHERE game_id in ({id_list})', con=conn).iloc[0,0]
+            
+            total_faceoff_wins = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM faceoffs \
+                        WHERE game_id in ({id_list}) AND winner_team == "{home}"', con=conn).iloc[0,0]
+            
+            total_blocks = pd.read_sql(f'SELECT SUM(event_id)  \
+                        FROM blocks \
+                        WHERE game_id in ({id_list}) AND blocker_team == "{home}"', con=conn).iloc[0,0]
+            
+            total_hits = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM hits \
+                        WHERE game_id in ({id_list}) AND hitter_team == "{home}"', con=conn).iloc[0,0]
+            
+
+            #Get the total minutes to calculate rates            
+            total_minutes = pd.read_sql(f'SELECT SUM(game_length_mins)  \
+                        FROM games \
+                        WHERE game_id in ({id_list})', con=conn).iloc[0,0]
+
+
+
+
+            try:
+                #Calculate all the rate stats
+                home_shots_per_60, home_goals_per_60 = 60*total_shots/total_minutes,60*total_goals/total_minutes
+                home_shots_against_per_60 = 60*total_shots_against/total_minutes
+                home_takeaways_per_60, home_giveaways_per_60 = 60*total_takeaways/total_minutes, 60*total_giveaways/total_minutes
+                home_pen_mins_per_60 = total_penalty_mins/total_minutes
+                home_hits_per_60, home_blocks_per_60 = 60*total_hits/total_minutes, 60*total_blocks/total_minutes
+
+                home_shooting_pct = 100*total_goals/total_shots
+                home_save_pct = 100-(100*total_goals_against/total_shots_against)
+                home_faceoff_pct = 100*total_faceoff_wins/total_faceoffs
+            except:
+                home_shooting_pct,home_save_pct, home_faceoff_pct = np.nan, np.nan, np.nan
+
+        else: 
+            home_shots_per_60, home_goals_per_60 = np.nan, np.nan
+            home_shooting_pct, home_save_pct = np.nan, np.nan
+            home_shots_against_per_60 = np.nan
+            home_takeaways_per_60, home_giveaways_per_60 = np.nan, np.nan
+            home_pen_mins_per_60 = np.nan
+            home_hits_per_60, home_blocks_per_60 = np.nan, np.nan
+            home_faceoff_pct = np.nan
+
+        games.loc[i,'home_shooting_pct'] = home_shooting_pct
+        games.loc[i,'home_shots_per_60'] = home_shots_per_60
+        games.loc[i,'home_goals_per_60'] = home_goals_per_60
+        games.loc[i,'home_save_pct'] = home_save_pct
+        games.loc[i,'home_shots_against_per_60'] = home_shots_against_per_60
+        games.loc[i,'home_giveaways_per_60'] = home_giveaways_per_60
+        games.loc[i,'home_takeaways_per_60'] = home_takeaways_per_60
+        games.loc[i,'home_pen_mins_per_60'] = home_pen_mins_per_60
+        games.loc[i,'home_hits_per_60'] = home_hits_per_60
+        games.loc[i,'home_faceoff_pct'] = home_faceoff_pct
+        games.loc[i,'home_blocks_per_60'] = home_blocks_per_60
+
+        #Now away team
+        if away_prior.shape[0] > 0:
+            
+            #Get all the shots from the games in the prior games list
+            id_list = ', '.join(str(id) for id in away_prior['game_id'].tolist())
+               
+            total_shots = pd.read_sql(f'SELECT COUNT(result)  \
+                                    FROM shots \
+                                    WHERE game_id in ({id_list}) AND shooter_team == "{away}"', con=conn).iloc[0,0]
+            
+            total_shots_against = pd.read_sql(f'SELECT COUNT(result)  \
+                                    FROM shots \
+                                    WHERE game_id in ({id_list}) AND shooter_team != "{away}" AND result != "miss"', con=conn).iloc[0,0]
+
+            total_goals = pd.read_sql(f'SELECT COUNT(result)  \
+                        FROM shots \
+                        WHERE game_id in ({id_list}) AND shooter_team == "{away}" AND result == "goal"', con=conn).iloc[0,0]
+            
+            total_goals_against = pd.read_sql(f'SELECT COUNT(result)  \
+                                    FROM shots \
+                                    WHERE game_id in ({id_list}) AND shooter_team != "{away}" AND result == "goal"', con=conn).iloc[0,0]
+            
+            total_giveaways = pd.read_sql(f'SELECT COUNT(event_id)  \
+                                    FROM giveaways \
+                                    WHERE game_id in ({id_list}) AND giver_team == "{away}"', con=conn).iloc[0,0]
+            
+            total_takeaways = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM takeaways \
+                        WHERE game_id in ({id_list}) AND taker_team == "{away}"', con=conn).iloc[0,0]
+            
+            total_penalty_mins = pd.read_sql(f'SELECT SUM(duration)  \
+                        FROM penalties \
+                        WHERE game_id in ({id_list}) AND committed_team == "{away}"', con=conn).iloc[0,0]
+            
+            total_faceoffs = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM faceoffs \
+                        WHERE game_id in ({id_list})', con=conn).iloc[0,0]
+            
+            total_faceoff_wins = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM faceoffs \
+                        WHERE game_id in ({id_list}) AND winner_team == "{away}"', con=conn).iloc[0,0]
+            
+            total_blocks = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM blocks \
+                        WHERE game_id in ({id_list}) AND blocker_team == "{away}"', con=conn).iloc[0,0]
+            
+            total_hits = pd.read_sql(f'SELECT COUNT(event_id)  \
+                        FROM hits \
+                        WHERE game_id in ({id_list}) AND hitter_team == "{away}"', con=conn).iloc[0,0]
+            
+
+            #Get the total minutes to calculate rates            
+            total_minutes = pd.read_sql(f'SELECT SUM(game_length_mins)  \
+                        FROM games \
+                        WHERE game_id in ({id_list})', con=conn).iloc[0,0]
+
+
+            try:
+                #Calculate all the rate stats
+                away_shots_per_60, away_goals_per_60 = 60*total_shots/total_minutes,60*total_goals/total_minutes
+                away_shots_against_per_60 = 60*total_shots_against/total_minutes
+                away_takeaways_per_60, away_giveaways_per_60 = 60*total_takeaways/total_minutes, 60*total_giveaways/total_minutes
+                away_pen_mins_per_60 = total_penalty_mins/total_minutes
+                away_hits_per_60, away_blocks_per_60 = 60*total_hits/total_minutes, 60*total_blocks/total_minutes
+
+                away_shooting_pct = 100*total_goals/total_shots
+                away_save_pct = 100-(100*total_goals_against/total_shots_against)
+                away_faceoff_pct = 100*total_faceoffs/total_faceoff_wins
+            except:
+                away_shooting_pct,away_save_pct, away_faceoff_pct = np.nan, np.nan, np.nan
+
+        else: 
+            away_shots_per_60, away_goals_per_60 = np.nan, np.nan
+            away_shooting_pct, away_save_pct = np.nan, np.nan
+            away_shots_against_per_60 = np.nan
+            away_takeaways_per_60, away_giveaways_per_60 = np.nan, np.nan
+            away_pen_mins_per_60 = np.nan
+            away_hits_per_60, away_blocks_per_60 = np.nan, np.nan
+            away_faceoff_pct = np.nan
+
+        games.loc[i,'away_shooting_pct'] = away_shooting_pct
+        games.loc[i,'away_shots_per_60'] = away_shots_per_60
+        games.loc[i,'away_goals_per_60'] = away_goals_per_60
+        games.loc[i,'away_save_pct'] = away_save_pct
+        games.loc[i,'away_shots_against_per_60'] = away_shots_against_per_60
+        games.loc[i,'away_giveaways_per_60'] = away_giveaways_per_60
+        games.loc[i,'away_takeaways_per_60'] = away_takeaways_per_60
+        games.loc[i,'away_pen_mins_per_60'] = away_pen_mins_per_60
+        games.loc[i,'away_hits_per_60'] = away_hits_per_60
+        games.loc[i,'away_faceoff_pct'] = away_faceoff_pct
+        games.loc[i,'away_blocks_per_60'] = away_blocks_per_60
+
+        if (i+1)%25 == 0:
+            updated_time = dt.datetime.now()
+            time_delta = updated_time - now
+            pct_complete = 100*((i+1)/len(game_list))
+            anticipated_length = (100/pct_complete) * time_delta
+            anticipated_finish = now + anticipated_length
+            print(f"Done with {i+1} of {len(game_list)} games {round(pct_complete,1)}%; anticipated finish: {anticipated_finish}")
     
-        #Now let's calculate some team metrics we want to know
-
-        #Shooting %  & shots per 60 last N games
-
-
-
-        #Save % last N games
-
-
-
-
     
-    
-    start_game = 200
-
-
-
-
-    #This is for giving teams away wins
-    switch_dict = {0:1,
-                1:0}
-
-    for i, game in games.iterrows():
-
-        #We'll not count in the first 100 games of the season to make sure each team has ~5 games in their history already
-        #if i < start_game: 
-        #    continue
-
-
-
-        #Get the last 
-        home_dict = games[((games['home_team']==home) | (games['away_team']==home)) & (games['date'] < date)].iloc[-last_n_games:,]
-        away_dict = games[((games['home_team']==away) | (games['away_team']==away)) & (games['date'] < date)].iloc[-last_n_games:,]
-        
-        home_gpg_last_n = 0
-        away_gpg_last_n = 0
-        home_point_pct_last_n = 0
-        away_point_pct_last_n = 0
-
-        for j, g in home_dict.iterrows():
-            if home == g['home_team']:
-                home_gpg_last_n += g['home_score']/last_n_games
-                home_point_pct_last_n += 2*g['home_win']/last_n_games
-                if g['full_time'] != 'REG' and g['home_win'] == 0:
-                    home_point_pct_last_n += g['home_win']/last_n_games
-            else:
-                home_gpg_last_n += g['away_score']/last_n_games
-                home_point_pct_last_n += 2*switch_dict[g['home_win']]/last_n_games
-                if g['full_time'] != 'REG' and g['home_win'] == 1:
-                    home_point_pct_last_n += switch_dict[g['home_win']]/last_n_games
-
-        for j, g in away_dict.iterrows():
-            if away == g['home_team']:
-                away_gpg_last_n += g['home_score']/last_n_games
-                away_point_pct_last_n += 2*g['home_win']/last_n_games
-                if g['full_time'] != 'REG' and g['home_win'] == 0:
-                    away_point_pct_last_n += g['home_win']/last_n_games
-            else:
-                away_gpg_last_n += g['away_score']/last_n_games
-                away_point_pct_last_n += 2*switch_dict[g['home_win']]/last_n_games
-                if g['full_time'] != 'REG' and g['home_win'] == 1:
-                    away_point_pct_last_n += switch_dict[g['home_win']]/last_n_games
-
-        games.loc[i ,'home_gpg_last_n'] = home_gpg_last_n
-        games.loc[i ,'away_gpg_last_n'] = away_gpg_last_n
-        games.loc[i ,'home_point_pct_last_n'] = home_point_pct_last_n
-        games.loc[i ,'away_point_pct_last_n'] = away_point_pct_last_n
-
-    games = games.iloc[start_game-1:,]
-    games.dropna(axis=0, how='any')
-
-    gpg_list = games['home_gpg_last_n'].tolist() + games['away_gpg_last_n'].tolist()
-    ppg_list = games['home_point_pct_last_n'].tolist() + games['away_point_pct_last_n'].tolist()
-
-    gpg_mean = np.average(gpg_list)
-    gpg_sd = np.std(gpg_list)
-    ppg_mean = np.average(ppg_list)
-    ppg_sd = np.std(ppg_list)
-
-    games['home_gpg_last_n'] = (games['home_gpg_last_n'] - gpg_mean)/gpg_sd
-    games['away_gpg_last_n'] = (games['away_gpg_last_n'] - gpg_mean)/gpg_sd
-    games['home_point_pct_last_n'] = (games['home_point_pct_last_n'] - ppg_mean)/ppg_sd
-    games['away_point_pct_last_n'] = (games['away_point_pct_last_n'] - ppg_mean)/ppg_sd
-
-    #games['home_gpg_diff'] = games['home_gpg_last_n'] - games['away_gpg_last_n']
-    #games['home_ppg_diff'] = games['home_point_pct_last_n'] - games['away_point_pct_last_n']
-
-    #We'll also normalize the columns for win margin and total_goals
-    games[['home_win_margin']] = StandardScaler().fit_transform(games[['home_win_margin']])
-    games[['total_goals']] = StandardScaler().fit_transform(games[['total_goals']])
-
-    #Drop the helper columns we made along hte way
-    #helper_cols = ['home_gpg_last_n','away_gpg_last_n','home_point_pct_last_n','away_point_pct_last_n']
-    #games.drop(helper_cols,axis=1, inplace=True)
-
     #Drop the other columns that are just giving us info at this point and nothing predictive
     info_cols = ['season','date','home_team','full_time','home_score','away_score','away_team']
     games.drop(info_cols,axis=1,inplace=True)
 
+
+
+    #Let's add the difference to a database
+    #Only keep the ones that were in the list of games we're pulling
+    games = games[games['game_id'].isin(game_list)]
+
+    if overwrite_db:
+        games.to_sql('games_adv',conn_proc,if_exists='replace')
+        overwrite_db = False
+    else:
+        games.to_sql('games_adv',conn_proc,if_exists='append')
+
     return games
 
-print(process_special_teams())
+def fill_na_adv_data():
+    #Replace the NAs with the appropriate values calculated from other data
+
+    ##########
+    print("nothing yet!")
+
+def scale_adv_data():
+#Scaling all the variables
+    #margin_scaler = StandardScaler().fit(np.array(games[['home_win_margin']]).reshape(-1,1))
+    #total_scaler = StandardScaler().fit(np.array(games[['total_goals']]).reshape(-1,1))
+
+    #Save the scalers out to transform back to raw numbers later on; only do this if we're working with hte large dataset
+    #if overwrite_db:
+    #    joblib.dump(margin_scaler, 'models\\margin_scaler')
+    #    joblib.dump(total_scaler, 'models\\total_scaler')
+
+    #games[['home_win_margin']] = margin_scaler.transform(np.array(games['home_win_margin']).reshape(-1,1))
+    #games[['total_goals']] = total_scaler.transform(np.array(games['total_goals']).reshape(-1,1))
+    print("nothing yet!")
+
+
+
+def get_team_data(team, last_n_games=5):
+
+    #Read in data for this team from SQL
+    team_data = pd.read_sql(f"SELECT *\
+                            FROM games \
+                            WHERE home_team='{team}' OR away_team='{team}' \
+                            ORDER BY id DESC \
+                            LIMIT {last_n_games}", con=conn)
+    
+    #Was this team home or away in their last game? Did they win?
+    last_game_id = team_data.iloc[-1,1]
+    if team_data.iloc[-1,8]==team:
+        team_point_pct = pd.read_sql(f"SELECT home_point_pct_after\
+                                FROM games_adv \
+                                WHERE id = {last_game_id}", con=conn).values[0,0]
+    else:
+        team_point_pct = pd.read_sql(f"SELECT away_point_pct_after\
+                        FROM games_adv \
+                        WHERE id = {last_game_id}", con=conn).values[0,0]
+        
+    total_points = 0
+    total_goals = 0
+    
+    for i,game in team_data.iterrows():
+        if game['home_team'] == team:
+            total_goals += game['home_score']
+        else: total_goals += game['away_score']
+            
+        if game['winner'] == team:
+            total_points += 2
+        elif game['full_time'] != 'REG':
+            total_points += 1
+
+    ppg = total_points/(last_n_games*2)
+    gpg = total_goals/last_n_games
+
+
+    df = pd.DataFrame.from_dict({'gpg_last_n':[gpg],
+                                'point_pct_last_n':[ppg],
+                                'point_pct':[team_point_pct]})
+
+    return df
+

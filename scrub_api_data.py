@@ -24,8 +24,6 @@ from odds import get_odds
 #run lookups for player ids to get their names directly within the files?
 #do the same for team IDs in the _games files
 
-#Maybe we ditch the whole csv thing and just backup the database when we need to....
-
 def get_game_summaries(replace_table=False):
     #Capture the outcomes and other data (date, home/away, etc. about each game)
 
@@ -33,14 +31,14 @@ def get_game_summaries(replace_table=False):
     conn = sqlite3.connect('data\db.db')
     c = conn.cursor()
 
-    #If the table already exists in SQL, we won't bother
+    #If exists and we're not replacing, get the date to start at
     try:
-        most_recent_game = pd.read_sql('SELECT MAX(id) \
+        most_recent_game = pd.read_sql('SELECT MAX(game_id) \
                     FROM games', con=conn).iloc[0,0]
         
         most_recent_game_date = parser.parse(pd.read_sql(f'SELECT date \
                                             FROM games \
-                                            WHERE id = {most_recent_game} \
+                                            WHERE game_id = {most_recent_game} \
                                             LIMIT 1', con=conn).iloc[0,0])
         
         #We'll go back 1 month just to be sure we didn't miss any games 
@@ -49,20 +47,32 @@ def get_game_summaries(replace_table=False):
         if(replace_table):
             raise Exception("Replacing historical 'games' table in SQL database...")
     except:
+        #we're starting from scratch, have to replace all the tables
+        conn.close()
+        os.remove('data\db.db')
+        
+        #Start a new one
+        Path('data\db.db').touch()
+        conn = sqlite3.connect('data\db.db')
+        c = conn.cursor()
+
         #We'd start in 2012 to replace all if we break above
         date = dt.date(2011, 1, 1)
+        
+
+
 
     #Run through today
     end_date = dt.date.today()
     
     #Df to hold the data
     games = pd.DataFrame()
-    save_every_n_games = 500
+    save_every_n_games = 250
 
     #df holding full list of games we have in the db
     try:
-        full_game_list = pd.read_sql('SELECT id \
-                                     FROM games', con=conn)['id'].tolist()
+        full_game_list = pd.read_sql('SELECT game_id \
+                                     FROM games', con=conn)['game_id'].tolist()
         
     except:
         full_game_list = []
@@ -81,9 +91,10 @@ def get_game_summaries(replace_table=False):
 
                 #Check to make sure games were played
                 if game_date['numberOfGames'] > 0:
+
                     for game in game_date['games']:
                         game_count += 1
-                        #print(game_date['date'], game['id'], game['gameState'])
+
                         #Check to see if the game got canceled and that it has already occured
                         if (game['gameScheduleState'] == 'OK' and game['gameState'] == 'OFF'):
 
@@ -122,7 +133,7 @@ def get_game_summaries(replace_table=False):
 
                             
                             if game['id'] not in full_game_list:
-                                temp_dict = {'id':[id],
+                                temp_dict = {'game_id':[id],
                                         'season':[season],
                                         'date':[start_date],
                                         'neutral_site':[neutral_site],
@@ -146,7 +157,7 @@ def get_game_summaries(replace_table=False):
                                 temp = pd.DataFrame.from_dict(temp_dict)   
                                 games = pd.concat([games, temp])
 
-                                games.set_index('id',drop=True)
+                                games.set_index('game_id',drop=True)
 
                         #We write it to SQL database if it's not there, for more recent data we will rely on another function
                         if game_count % save_every_n_games == 0 and game_count > 0:
@@ -154,10 +165,6 @@ def get_game_summaries(replace_table=False):
                                 games.to_sql('games', conn, if_exists='append')
                             except:
                                 pass
-
-                            if not(os.path.isfile('data\games\games.csv')):
-                                    games.to_csv('data\games\games.csv', index=False, mode='w', header=True)
-                            else:  games.to_csv('data\games\games.csv', index=False, mode='a', header=False)
 
                             games = pd.DataFrame()
 
@@ -173,10 +180,6 @@ def get_game_summaries(replace_table=False):
     except:
         pass
 
-    if not(os.path.isfile('data\games\games.csv')):
-            games.to_csv('data\games\games.csv', index=False, mode='w', header=True)
-    else:  games.to_csv('data\games\games.csv', index=False, mode='a', header=False)
-
     #Let's make a backup of the database for good measure
     shutil.copy('data\db.db',f'data\\backups\db_backup_{dt.date.today()}.db')
 
@@ -184,7 +187,7 @@ def get_game_summaries(replace_table=False):
 
 def get_stats(replace_table=False): 
     #Get stats from each game by each skater and goalie as well as sub-game data (boxscore by period)
-    #replace_table -> will make fresh csv files and replace each table in the database
+    #replace_table -> will replace each table in the database
 
     Path('data\db.db').touch()
     conn = sqlite3.connect('data\db.db')
@@ -195,8 +198,8 @@ def get_stats(replace_table=False):
         game_list_exist = pd.read_sql('SELECT game_id \
                     FROM box_scores', con=conn)['game_id'].to_list()
         
-        game_list_full = pd.read_sql('SELECT id \
-                                     FROM games', con=conn)['id'].to_list()
+        game_list_full = pd.read_sql('SELECT game_id \
+                                     FROM games', con=conn)['game_id'].to_list()
         
         games = list(set(game_list_full) - set(game_list_exist))
 
@@ -213,25 +216,20 @@ def get_stats(replace_table=False):
     
     except:
         print("Replacing historical plays tables in SQL database...")
-        games = pd.read_sql('SELECT id \
-                    FROM games', con=conn)['id'].to_list()
+        
+        #Delete all besides the games table 
+        table_list = ['shots','faceoffs','penalties','hits','giveaways','takeaways','blocks']
+        for table in table_list:
+            c.execute(f"DROP table IF EXISTS {table}")
+
+        #Going to be using all the games
+        games = pd.read_sql('SELECT game_id \
+                    FROM games', con=conn)['game_id'].to_list()
         
     #As housecleaning, we need to follow orders about starting from scratch or not
     if(replace_table):
-        #Events
-        for f in os.listdir('data\events'):
-            if not f.endswith(".csv"):
-                continue
-            os.remove(os.path.join('data\events', f))
-
-        #Box scores
-        for f in os.listdir('data\games'):
-            if not f.endswith('ox_scores.csv') and not f.endswith('_games.csv'):
-                continue
-            os.remove(os.path.join('data\games', f))
-
         #SQL tables
-        sql_tables = ['shots','faceoffs','penalties','hits','giveaways','takeaways','blocks','box_scores']
+        sql_tables = ['shots','faceoffs','penalties','hits','giveaways','takeaways','blocks','box_scores','goalie_games','skater_games']
         for table in sql_tables:
             c.execute(f"DROP TABLE IF EXISTS {table}")
     
@@ -251,8 +249,16 @@ def get_stats(replace_table=False):
     skater_stats = pd.DataFrame()
     goalie_stats = pd.DataFrame()
 
-    save_every_n_games = 5
+    save_every_n_games = 10
     takeaway_count = 0
+
+    games_temp = pd.read_sql('SELECT * \
+                    FROM games \
+                    LIMIT 1', con=conn)
+    if 'game_length_mins' in games_temp.columns:
+       games_has_game_length = True
+    else: games_has_game_length = False
+
     for idx, id in enumerate(games):
 
         #Url for play-by-play data, this gets us things like hits, shots, etc.
@@ -312,7 +318,11 @@ def get_stats(replace_table=False):
                     except: 
                         shooter = event['details']['scoringPlayerId']
 
+                    #Assign the teams
                     shooter_team = team_dict[event['details']['eventOwnerTeamId']]
+                    if shooter_team == response['homeTeam']['abbrev']:
+                        goalie_team = response['awayTeam']['abbrev']
+                    else: goalie_team = response['homeTeam']['abbrev']
 
                     #if its a goal get the assister(s)
                     if result == 'goal':
@@ -335,7 +345,7 @@ def get_stats(replace_table=False):
 
                     temp = {
                         'game_id':id,
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -347,6 +357,7 @@ def get_stats(replace_table=False):
                         'shooter':[shooter],
                         'shooter_team':[shooter_team],
                         'goalie':[goalie],
+                        'goalie_team':[goalie_team],
                         'assist1':[assist1],
                         'assist2':[assist2]
                     }
@@ -365,7 +376,7 @@ def get_stats(replace_table=False):
                     
                     temp = {
                         'game_id':id,
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -408,7 +419,7 @@ def get_stats(replace_table=False):
                     
                     temp = {
                         'game_id':id,
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -438,7 +449,7 @@ def get_stats(replace_table=False):
                     
                     temp = {
                         'game_id':id,
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -464,7 +475,7 @@ def get_stats(replace_table=False):
                     
                     temp = {
                         'game_id':id,
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -490,7 +501,7 @@ def get_stats(replace_table=False):
 
                     temp = {
                         'game_id':id,
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -527,7 +538,7 @@ def get_stats(replace_table=False):
                     
                     temp = {
                         'game_id':[id],
-                        'id':[event_id],
+                        'event_id':[event_id],
                         'period':[period],
                         'time_remaining':[time_remaining],
                         'home_team_side':[home_team_side],
@@ -541,10 +552,33 @@ def get_stats(replace_table=False):
                     }
                     
                     blocks_df = pd.concat([blocks_df, pd.DataFrame.from_dict(temp)])    
+            
+
+            #Let's use this opportunity to set the length of the game by looking at the last shot
+            this_game_shots = shots_df[shots_df['game_id']==id]
+            last_shot = this_game_shots.iloc[-1,2:4]
+
+            #No overtime
+            if last_shot['period'] == 3:
+                game_length = 60
+            
+            #Shootout
+            elif last_shot['period'] == 5:
+                game_length = 65
+            
+            #Overtime winner
+            else:
+                game_length = 60 + (300-time_remaining)/60
+
+            if not games_has_game_length:
+                c.execute("ALTER TABLE games ADD COLUMN game_length_mins")
+                games_has_game_length = True
+            c.execute(f"UPDATE games SET game_length_mins = {game_length} WHERE game_id = {id}")
+                
         except:
             pass
         
-        
+
         
         #Now we can go and get the box scores as well, this gets us full-game scores and player-by-player game stats
         url = f'https://api-web.nhle.com/v1/gamecenter/{id}/boxscore'
@@ -683,7 +717,7 @@ def get_stats(replace_table=False):
 
                                     temp = pd.DataFrame.from_dict({
                                         'game_id': [id],
-                                        'id': [player_id],
+                                        'player_id': [player_id],
                                         'number': [number],
                                         'name':[name],
                                         'position':[position],
@@ -702,6 +736,7 @@ def get_stats(replace_table=False):
                                         'ppp':[ppp],
                                         'shg':[shg],
                                         'shp':[shp],
+                                        'shots':[shots],
                                         'faceoffs':[faceoffs],
                                         'faceoff_wins':[faceoff_wins],
                                         'pp_toi':[pp_toi],
@@ -725,7 +760,7 @@ def get_stats(replace_table=False):
 
                                     temp = pd.DataFrame.from_dict({
                                         'game_id': [id],
-                                        'id': [player_id],
+                                        'player_id': [player_id],
                                         'number': [number],
                                         'name':[name],
                                         'position':[position],
@@ -757,10 +792,6 @@ def get_stats(replace_table=False):
         if idx%save_every_n_games == 0 and idx>0:
             try:
                 if skater_stats.shape[0] > 0:
-                    if not(os.path.isfile('data\games\skater_games.csv')):
-                        skater_stats.to_csv('data\games\skater_games.csv', index=False, mode='w', header=True)
-                    else: skater_stats.to_csv('data\games\skater_games.csv', index=False, mode='a', header=False)
-
                     skater_stats.to_sql('skater_games',conn,if_exists='append')
                     skater_stats = pd.DataFrame()
             except:
@@ -768,10 +799,6 @@ def get_stats(replace_table=False):
 
             try:
                 if goalie_stats.shape[0] > 0:
-                    if not(os.path.isfile('data\games\goalie_games.csv')):
-                        goalie_stats.to_csv('data\games\goalie_games.csv', index=False, mode='w', header=True)
-                    else: goalie_stats.to_csv('data\games\goalie_games.csv', index=False, mode='a', header=False)
-
                     goalie_stats.to_sql('goalie_games',conn,if_exists='append')
                     goalie_stats = pd.DataFrame()
             except:
@@ -779,17 +806,12 @@ def get_stats(replace_table=False):
 
             try:
                 if box_score.shape[0] > 0:
-                    if not(os.path.isfile('data\games\\box_scores.csv')):
-                        box_score.to_csv('data\games\\box_scores.csv', index=False, mode='w', header=True)
-                    else: box_score.to_csv('data\games\\box_scores.csv', index=False, mode='a', header=False)
-
                     box_score.to_sql('box_scores',conn,if_exists='append')
 
                     box_score = pd.DataFrame()
             except:
                 pass
             
-
             tables = {'shots':shots_df,
                 'faceoffs':faceoffs_df,
                 'penalties':penalties_df,
@@ -800,12 +822,7 @@ def get_stats(replace_table=False):
             
             for key, value in tables.items():
                 try:
-                    #if file exists, we'll write the header
                     if value.shape[0] > 0:
-                        if not(os.path.isfile(f'data\events\{key}.csv')):
-                            value.to_csv(f'data\events\{key}.csv', index=False, mode='w', header=True)
-                        else: value.to_csv(f'data\events\{key}.csv', index=False, mode='a', header=False)
-                        
                         value.to_sql(key, conn, if_exists='append')
                 except:
                     pass 
@@ -818,12 +835,9 @@ def get_stats(replace_table=False):
             giveaways_df = pd.DataFrame()
             takeaways_df = pd.DataFrame()
             blocks_df = pd.DataFrame()
+
             try:
                 if skater_stats.shape[0] > 0:
-                    if not(os.path.isfile('data\games\skater_games.csv')):
-                        skater_stats.to_csv('data\games\skater_games.csv', index=False, mode='w', header=True)
-                    else: skater_stats.to_csv('data\games\skater_games.csv', index=False, mode='a', header=False)
-
                     skater_stats.to_sql('skater_games',conn,if_exists='append')
                     skater_stats = pd.DataFrame()
             except:
@@ -831,10 +845,6 @@ def get_stats(replace_table=False):
 
             try:
                 if goalie_stats.shape[0] > 0:
-                    if not(os.path.isfile('data\games\goalie_games.csv')):
-                        goalie_stats.to_csv('data\games\goalie_games.csv', index=False, mode='w', header=True)
-                    else: goalie_stats.to_csv('data\games\goalie_games.csv', index=False, mode='a', header=False)
-
                     goalie_stats.to_sql('goalie_games',conn,if_exists='append')
                     goalie_stats = pd.DataFrame()
             except:
@@ -843,10 +853,6 @@ def get_stats(replace_table=False):
     #One last round of saving for the things that were left out 
     try:
         if box_score.shape[0] > 0:
-            if not(os.path.isfile('data\games\\box_scores.csv')):
-                box_score.to_csv('data\games\\box_scores.csv', index=False, mode='w', header=True)
-            else: box_score.to_csv('data\games\\box_scores.csv', index=False, mode='a', header=False)
-
             box_score.to_sql('box_scores',conn,if_exists='append')
 
             box_score = pd.DataFrame()
@@ -866,10 +872,6 @@ def get_stats(replace_table=False):
         try:
             #if file exists, we'll write the header
             if value.shape[0] > 0:
-                if not(os.path.isfile(f'data\events\{key}.csv')):
-                    value.to_csv(f'data\events\{key}.csv', index=False, mode='w', header=True)
-                else: value.to_csv(f'data\events\{key}.csv', index=False, mode='a', header=False)
-                
                 value.to_sql(key, conn, if_exists='append')
         except:
             pass 
@@ -892,11 +894,11 @@ def update_db():
 
     most_recent_game = pd.read_sql('SELECT * \
                         FROM games \
-                        ORDER BY id DESC \
+                        ORDER BY game_id DESC \
                         LIMIT 1', con=conn)
     
     home_team, away_team= most_recent_game['home_team'].values[0],most_recent_game['away_team'].values[0]
-    recent_id = most_recent_game.loc[0,'id']
+    recent_id = most_recent_game.loc[0,'game_id']
     
     now = dt.datetime.now().time().strftime('%I:%M %p')
     now_date = dt.datetime.now().date()
@@ -914,7 +916,7 @@ def get_team_info(id):
     print("nothing yet!")
 
 def get_player_info(id, refresh=False):
-    #Refresh: update the player's info in the database / csv
+    #Refresh: update the player's info in the database
     #
 
     #to keep in mind: we can also get season-by-season stats for each player broken out as regular vs. post-season
@@ -1017,12 +1019,3 @@ def get_player_info(id, refresh=False):
 
 
     return 
-
-
-
-
-#Goalie
-#get_player_info(8478048)
-
-#Skater
-#sget_player_info(8477180)
