@@ -20,6 +20,7 @@ from odds import get_odds
 # - update the 'id' field for all player tables ot be player_id instead for uniformity
 # - add a player_home field to each event table?
 # - game dates seem to be off a bit
+# - add the situation code for each event to determine the # of skaters/goalies on the ice
 
 #run lookups for player ids to get their names directly within the files?
 #do the same for team IDs in the _games files
@@ -204,7 +205,6 @@ def get_stats(replace_table=False):
         games = list(set(game_list_full) - set(game_list_exist))
 
         if len(games) == 0:
-            print("No new games to pull.")
             return
 
         games.sort()
@@ -876,44 +876,38 @@ def get_stats(replace_table=False):
         except:
             pass 
 
-def update_db():
-
-    #Pull all new games that are not yet stored in the database
-    get_game_summaries()
-
-    #Get the event and game-level stats for all the games we just pulled in
-    get_stats()
-
-    #Get today's odds 
-    get_odds()
-
-    #Print some information about what we just did
-    Path('data\db.db').touch()
-    conn = sqlite3.connect('data\db.db')
-    c = conn.cursor()
-
-    most_recent_game = pd.read_sql('SELECT * \
-                        FROM games \
-                        ORDER BY game_id DESC \
-                        LIMIT 1', con=conn)
-    
-    home_team, away_team= most_recent_game['home_team'].values[0],most_recent_game['away_team'].values[0]
-    recent_id = most_recent_game.loc[0,'game_id']
-    
-    now = dt.datetime.now().time().strftime('%I:%M %p')
-    now_date = dt.datetime.now().date()
-    
-
-    
-    print(f"Data up to date with finished games as of {now} ET on {now_date}. \nID of most recent game: {recent_id}, {away_team} @ {home_team}")
-    
 
 
     return
 
-def get_team_info(id):
+def get_team_info():
     #Get the team to ID mapping and other info like conference and division
-    print("nothing yet!")
+
+    Path('data\db.db').touch()
+    conn = sqlite3.connect('data\db.db')
+    c = conn.cursor()
+    
+    url ='https://api.nhle.com/stats/rest/en/team'
+    response = requests.get(url).json()
+
+    team_data = pd.DataFrame()
+
+    for row in response['data']:
+        
+        temp = {
+            'team_id':[row['id']],
+            'franchise_id':[row['franchiseId']],
+            'team_full_name':[row['fullName']],
+            'team':[row['rawTricode']]
+        }
+
+        temp = pd.DataFrame.from_dict(temp)
+
+        team_data = pd.concat([team_data,temp])
+
+    #Save to sql
+    team_data.to_sql('team_dictionary',if_exists='replace',con=conn)
+
 
 def get_player_info(id, refresh=False):
     #Refresh: update the player's info in the database
